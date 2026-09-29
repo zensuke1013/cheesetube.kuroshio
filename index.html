@@ -1,1 +1,202 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>🧀 CheeseTube</title>
+    <style>
+        body { background-color: #FFFDEB; color: #5C3A21; font-family: sans-serif; margin: 0; display: flex; flex-direction: column; height: 100vh; }
+        header { background-color: #FFCC00; padding: 15px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px #FF9900; }
+        .main { display: flex; flex: 1; overflow: hidden; }
+        .player { flex: 2; padding: 20px; display: flex; flex-direction: column; gap: 10px; }
+        .v-wrap { width: 100%; background: #FF9900; border-radius: 16px; aspect-ratio: 16/9; position: relative; }
+        video, iframe { width: 100%; height: 100%; border-radius: 16px; border: none; }
+        .chat { background: #FFFAA0; border-radius: 16px; padding: 15px; flex: 1; display: flex; flex-direction: column; border: 3px dashed #FF9900; }
+        .c-list { flex: 1; overflow-y: auto; text-align: left; padding: 5px; margin-bottom: 10px; background: rgba(255,255,255,0.4); border-radius: 8px; }
+        .c-item { margin: 5px 0; padding: 5px; border-bottom: 1px dashed #FF9900; word-break: break-all; }
+        .sidebar { flex: 1; background: #FFE666; padding: 20px; overflow-y: auto; border-left: 5px solid #FFCC00; }
+        .card { background: #FFFDEB; border-radius: 12px; padding: 10px; cursor: pointer; margin-bottom: 10px; border: 2px solid #FF9900; text-align: left; }
+        .btn { background: #FF9900; color: white; border: none; padding: 10px 15px; font-weight: bold; border-radius: 8px; cursor: pointer; }
+        .btn:hover { background: #E68A00; }
+        .btn-danger { background: #FF4444; font-size: 11px; padding: 3px 8px; border-radius: 4px; float: right; }
+        input { padding: 8px; border-radius: 8px; border: 2px solid #FF9900; }
+    </style>
+    <script src="https://youtube.com"></script>
+</head>
+<body>
+    <!-- 🔒 パスワード機能（合言葉） -->
+    <script>
+        // ↓「cheese2026」の部分を、クラスのみんなで決めた好きな合言葉に変えられます
+        const SECRET_PASSWORD = "cheese2026"; 
+        
+        const userInput = prompt("【🧀 CheeseTube】\nクラスの合言葉（パスワード）を入力してね：");
+        if (userInput !== SECRET_PASSWORD) {
+            alert("パスワードが違います！画面を閉じます。");
+            document.body.innerHTML = "<div style='text-align:center; padding-top:100px;'><h1>🔑 閲覧権限がありません</h1><p>正しいパスワードを知っている人のみアクセスできます。</p></div>";
+            window.stop();
+        }
+    </script>
+
+    <header>
+        <h1>🧀 CheeseTube</h1>
+        <div>
+            <!-- ✨ チャット用の名前入力欄を追加しました -->
+            <input type="text" id="nameI" placeholder="あなたの名前" style="width:100px;">
+            <input type="text" id="t" placeholder="動画のタイトル" style="width:120px;">
+            <input type="text" id="u" placeholder="YouTubeや動画のURL" style="width:200px;">
+            <button class="btn" onclick="upV()">動画を配信！</button>
+        </div>
+    </header>
+    <div class="main">
+        <div class="player">
+            <div class="v-wrap">
+                <video id="v" controls autoplay style="display:block;"></video>
+                <div id="yt" style="display:none; width:100%; height:100%;"></div>
+            </div>
+            <h2 id="vT">動画を選んでね 🧀</h2>
+            <div class="chat">
+                <h3>💬 チーズチャット</h3>
+                <div class="c-list" id="cL"></div>
+                <div style="display:flex; gap:10px;">
+                    <input type="text" id="cI" placeholder="コメントを入力..." style="flex:1;">
+                    <button class="btn" onclick="sendC()">送信</button>
+                </div>
+            </div>
+        </div>
+        <div class="sidebar">
+            <h3>次に再生する動画</h3>
+            <div id="vL"></div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://gstatic.com";
+        import { getDatabase, ref, push, onValue, remove } from "https://gstatic.com";
+
+        const config = {
+            apiKey: "AIzaSyC8FMpLGIkH07JKAlbjmOsmXA8kdAl4fPc",
+            authDomain: "://firebaseapp.com",
+            databaseURL: "https://firebaseio.com",
+            projectId: "cheesetube2026",
+            storageBucket: "cheesetube2026.firebasestorage.app",
+            messagingSenderId: "936307738502",
+            appId: "1:936307738502:web:96d3a525c377983c494e07"
+        };
+
+        const app = initializeApp(config);
+        const db = getDatabase(app);
+        let curId = "", ytPlayer = null;
+
+        window.onYouTubeIframeAPIReady = () => {
+            ytPlayer = new YT.Player('yt', {
+                playerVars: { 'autoplay': 1, 'controls': 1 }
+            });
+        };
+
+        // 🌟 グローバル関数にしてHTMLから呼び出せるように修正
+        window.deleteVideo = (vId) => {
+            if(confirm("この動画をリストから削除しますか？")) {
+                remove(ref(db, `videos/${vId}`));
+                remove(ref(db, `comments/${vId}`));
+                document.getElementById("vT").textContent = "動画を選んでね 🧀";
+                document.getElementById("yt").style.display = "none";
+                document.getElementById("v").style.display = "block";
+                document.getElementById("v").src = "";
+                document.getElementById("cL").innerHTML = "";
+            }
+        };
+
+        onValue(ref(db, 'videos'), (s) => {
+            const data = s.val();
+            const div = document.getElementById("vL");
+            div.innerHTML = "";
+            if (!data) return;
+            Object.keys(data).forEach((k) => {
+                const card = document.createElement("div");
+                card.className = "card";
+                
+                // ✨ 削除ボタンを追加
+                const delBtn = document.createElement("button");
+                delBtn.className = "btn btn-danger";
+                delBtn.textContent = "削除";
+                delBtn.onclick = (e) => {
+                    e.stopPropagation(); // カード自体のクリックイベントを防ぐ
+                    window.deleteVideo(k);
+                };
+                card.appendChild(delBtn);
+
+                const strong = document.createElement("strong");
+                strong.textContent = data[k].title;
+                card.appendChild(strong);
+                
+                card.onclick = () => {
+                    curId = k;
+                    document.getElementById("vT").textContent = "🧀 " + data[k].title;
+                    const ytId = data[k].url.match(/^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/);
+                    
+                    if (ytId && ytId[2] && ytId[2].length === 11) {
+                        document.getElementById("v").style.display = "none";
+                        document.getElementById("v").pause();
+                        document.getElementById("yt").style.display = "block";
+                        if (ytPlayer && ytPlayer.loadVideoById) {
+                            ytPlayer.loadVideoById(ytId[2]);
+                        } else {
+                            document.getElementById("yt").innerHTML = `<iframe src="https://youtube.com{ytId[2]}?autoplay=1" allow="autoplay" allowfullscreen></iframe>`;
+                        }
+                    } else {
+                        document.getElementById("yt").style.display = "none";
+                        if (ytPlayer && ytPlayer.stopVideo) ytPlayer.stopVideo();
+                        document.getElementById("v").style.display = "block";
+                        document.getElementById("v").src = data[k].url;
+                    }
+                    listenC(k);
+                };
+                div.appendChild(card);
+            });
+        });
+
+        window.upV = () => {
+            const t = document.getElementById("t").value, u = document.getElementById("u").value;
+            if(t && u) {
+                push(ref(db, 'videos'), { title: t, url: u.trim() });
+                document.getElementById("t").value="";
+                document.getElementById("u").value="";
+            }
+        };
+
+        function listenC(vId) {
+            onValue(ref(db, `comments/${vId}`), (s) => {
+                const data = s.val();
+                const div = document.getElementById("cL");
+                div.innerHTML = "";
+                if (!data) return;
+                Object.values(data).forEach((c) => {
+                    const p = document.createElement("div");
+                    p.className = "c-item";
+                    
+                    const userSpan = document.createElement("strong");
+                    userSpan.textContent = `🧀 ${c.name || 'ゲスト'}: `;
+                    
+                    const textSpan = document.createElement("span");
+                    textSpan.textContent = c.text;
+                    
+                    p.appendChild(userSpan);
+                    p.appendChild(textSpan);
+                    div.appendChild(p);
+                });
+                div.scrollTop = div.scrollHeight;
+            });
+        }
+
+        window.sendC = () => {
+            const txt = document.getElementById("cI").value;
+            let name = document.getElementById("nameI").value.trim();
+            if(!name) name = "ゲスト";
+            if(txt && curId) {
+                push(ref(db, `comments/${curId}`), { name: name, text: txt });
+                document.getElementById("cI").value = "";
+            }
+        };
+    </script>
+</body>
+</html>
 
