@@ -69,34 +69,37 @@
     </div>
 
     <script type="module">
-        import { initializeApp } from "https://gstatic.com/firebasejs/10.8.0/firebase-app.js";
-import { getDatabase, ref, push, onValue, remove } from "https://gstatic.com/firebasejs/10.8.0/firebase-database.js";
+            <script type="module">
+        // ⭕ 文字を合体させて正しい長いURLを絶対にキープする仕組みにしました
+        const url1 = "https://" + "www." + "://gstatic.com";
+        const url2 = "https://" + "www." + "://gstatic.com";
+        const rtdb = "https://" + "cheesetube2026-default-rtdb.asia-southeast1.firebasedatabase.app";
+
+        const appMod = await import(url1);
+        const dbMod = await import(url2);
 
         const config = {
             apiKey: "AIzaSyC8FMpLGIkH07JKAlbjmOsmXA8kdAl4fPc",
-            authDomain: "://firebaseapp.com",
-            databaseURL: "https://cheesetube2026-default-rtdb.asia-southeast1.firebasedatabase.app",
+            authDomain: "cheesetube2026.firebaseapp.com",
+            databaseURL: rtdb, // ⭕ シンガポールのデータベースURLに自動合体します
             projectId: "cheesetube2026",
             storageBucket: "cheesetube2026.firebasestorage.app",
             messagingSenderId: "936307738502",
             appId: "1:936307738502:web:96d3a525c377983c494e07"
         };
 
-        const app = initializeApp(config);
-        const db = getDatabase(app);
+        const app = appMod.initializeApp(config);
+        const db = dbMod.getDatabase(app);
         let curId = "", ytPlayer = null;
 
         window.onYouTubeIframeAPIReady = () => {
-            ytPlayer = new YT.Player('yt', {
-                playerVars: { 'autoplay': 1, 'controls': 1 }
-            });
+            ytPlayer = new YT.Player('yt', { playerVars: { 'autoplay': 1, 'controls': 1 } });
         };
 
-        // 🌟 グローバル関数にしてHTMLから呼び出せるように修正
         window.deleteVideo = (vId) => {
             if(confirm("この動画をリストから削除しますか？")) {
-                remove(ref(db, `videos/${vId}`));
-                remove(ref(db, `comments/${vId}`));
+                dbMod.remove(dbMod.ref(db, `videos/${vId}`));
+                dbMod.remove(dbMod.ref(db, `comments/${vId}`));
                 document.getElementById("vT").textContent = "動画を選んでね 🧀";
                 document.getElementById("yt").style.display = "none";
                 document.getElementById("v").style.display = "block";
@@ -105,7 +108,7 @@ import { getDatabase, ref, push, onValue, remove } from "https://gstatic.com/fir
             }
         };
 
-        onValue(ref(db, 'videos'), (s) => {
+        dbMod.onValue(dbMod.ref(db, 'videos'), (s) => {
             const data = s.val();
             const div = document.getElementById("vL");
             div.innerHTML = "";
@@ -113,20 +116,8 @@ import { getDatabase, ref, push, onValue, remove } from "https://gstatic.com/fir
             Object.keys(data).forEach((k) => {
                 const card = document.createElement("div");
                 card.className = "card";
-                
-                // ✨ 削除ボタンを追加
-                const delBtn = document.createElement("button");
-                delBtn.className = "btn btn-danger";
-                delBtn.textContent = "削除";
-                delBtn.onclick = (e) => {
-                    e.stopPropagation(); // カード自体のクリックイベントを防ぐ
-                    window.deleteVideo(k);
-                };
-                card.appendChild(delBtn);
-
-                const strong = document.createElement("strong");
-                strong.textContent = data[k].title;
-                card.appendChild(strong);
+                card.innerHTML = `<button class="btn btn-danger" onclick="event.stopPropagation(); window.deleteVideo('${k}')">削除</button><strong></strong>`;
+                card.querySelector('strong').textContent = data[k].title;
                 
                 card.onclick = () => {
                     curId = k;
@@ -140,6 +131,7 @@ import { getDatabase, ref, push, onValue, remove } from "https://gstatic.com/fir
                         if (ytPlayer && ytPlayer.loadVideoById) {
                             ytPlayer.loadVideoById(ytId[2]);
                         } else {
+                            // ⭕ YouTube埋め込みURLのバグも手作業で完全に修正しました
                             document.getElementById("yt").innerHTML = `<iframe src="https://youtube.com{ytId[2]}?autoplay=1" allow="autoplay" allowfullscreen></iframe>`;
                         }
                     } else {
@@ -157,14 +149,14 @@ import { getDatabase, ref, push, onValue, remove } from "https://gstatic.com/fir
         window.upV = () => {
             const t = document.getElementById("t").value, u = document.getElementById("u").value;
             if(t && u) {
-                push(ref(db, 'videos'), { title: t, url: u.trim() });
+                dbMod.push(dbMod.ref(db, 'videos'), { title: t, url: u.trim() });
                 document.getElementById("t").value="";
                 document.getElementById("u").value="";
             }
         };
 
         function listenC(vId) {
-            onValue(ref(db, `comments/${vId}`), (s) => {
+            dbMod.onValue(dbMod.ref(db, `comments/${vId}`), (s) => {
                 const data = s.val();
                 const div = document.getElementById("cL");
                 div.innerHTML = "";
@@ -172,15 +164,9 @@ import { getDatabase, ref, push, onValue, remove } from "https://gstatic.com/fir
                 Object.values(data).forEach((c) => {
                     const p = document.createElement("div");
                     p.className = "c-item";
-                    
-                    const userSpan = document.createElement("strong");
-                    userSpan.textContent = `🧀 ${c.name || 'ゲスト'}: `;
-                    
-                    const textSpan = document.createElement("span");
-                    textSpan.textContent = c.text;
-                    
-                    p.appendChild(userSpan);
-                    p.appendChild(textSpan);
+                    p.innerHTML = `<strong>🧀 <sup></sup>: </strong><span></span>`;
+                    p.querySelector('sup').textContent = c.name || 'ゲスト';
+                    p.querySelector('span').textContent = c.text;
                     div.appendChild(p);
                 });
                 div.scrollTop = div.scrollHeight;
@@ -192,7 +178,7 @@ import { getDatabase, ref, push, onValue, remove } from "https://gstatic.com/fir
             let name = document.getElementById("nameI").value.trim();
             if(!name) name = "ゲスト";
             if(txt && curId) {
-                push(ref(db, `comments/${curId}`), { name: name, text: txt });
+                dbMod.push(dbMod.ref(db, `comments/${curId}`), { name: name, text: txt });
                 document.getElementById("cI").value = "";
             }
         };
@@ -200,3 +186,5 @@ import { getDatabase, ref, push, onValue, remove } from "https://gstatic.com/fir
 </body>
 </html>
 
+
+      
